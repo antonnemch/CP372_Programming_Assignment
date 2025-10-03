@@ -37,8 +37,7 @@ This repository contains a simple TCP client–server system implemented in Pyth
 1. **Start the server**
    python Server.py
 2.	Start one or more clients
-   python Client.py
-  	Use the driver section in Client.py to spawn multiple clients automatically for demo/testing.
+   python Client.py -- Use the driver section in Client.py to spawn multiple clients automatically for demo/testing.
 
 Notes
 - Demo is mandatory; ensure both group members’ names appear in the code headers and in Report.pdf.
