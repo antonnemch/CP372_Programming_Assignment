@@ -3,9 +3,9 @@
 This repository contains a simple TCP client–server system implemented in Python for **CP372 – Computer Networks**.
 
 ## Repository Structure
-├── Server.py      # Multi-threaded TCP server (handles up to 3 clients; cache; file repo)
-├── Client.py      # Interactive client + driver code to spawn multiple clients for testing
-└── Report.pdf     # Implementation details, tests (with screenshots), challenges, improvements
+- Server.py      # Multi-threaded TCP server (handles up to 3 clients; cache; file repo)
+- Client.py      # Interactive client + driver code to spawn multiple clients for testing
+- Report.pdf     # Implementation details, tests (with screenshots), challenges, improvements
 
 ## Files
 
@@ -41,6 +41,6 @@ This repository contains a simple TCP client–server system implemented in Pyth
   	Use the driver section in Client.py to spawn multiple clients automatically for demo/testing.
 
 Notes
-	•	Demo is mandatory; ensure both group members’ names appear in the code headers and in Report.pdf.
-	•	Socket communication is TCP only, as per assignment requirements.
+- Demo is mandatory; ensure both group members’ names appear in the code headers and in Report.pdf.
+- Socket communication is TCP only, as per assignment requirements.
   
