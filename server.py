@@ -19,62 +19,86 @@ def handle_client(conn, addr, client_name):
                 'connected': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'disconnected': None
             }
+
         conn.send(f"Welcome {client_name}!".encode())
 
+        buffer = b""  # accumulate TCP stream here
+        file_mode = False
+
         while True:
-            try:
-                data = conn.recv(1024).decode().strip()
-                if not data:
-                    break
+            chunk = conn.recv(1024)
+            if not chunk:
+                break
+            buffer += chunk
 
-                if data.lower() == "exit":
-                    conn.send("Goodbye!".encode())
+            # process all complete lines currently in buffer
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                msg = line.decode(errors="replace").strip()
 
-                    break
-                elif data.lower() == "status":
+                # handle one complete command line
+                if not msg:
+                    continue
+
+                lower = msg.lower()
+
+                if lower == "exit":
+                    conn.send(b"Goodbye!")
+                    # after replying, close connection
+                    raise SystemExit
+
+                elif lower == "status":
                     with lock:
-                        response = "\n".join([f"{c}: {info['connected']} - {info['disconnected'] or 'Active'}"
-                                          for c, info in clients_cache.items()])
+                        response = "\n".join(
+                            f"{c}: {info['connected']} - {info['disconnected'] or 'Active'}"
+                            for c, info in clients_cache.items()
+                        )
                     conn.send(response.encode())
-                elif data.lower() == "list":
+
+                elif lower == "list":
                     try:
                         files = os.listdir(FILE_DIR)
                         conn.send("\n".join(files).encode())
+                        file_mode = True
                     except Exception as e:
-                        conn.send(f"Error listing files: {str(e)}".encode())
-                elif os.path.exists(os.path.join(FILE_DIR, data)):
-                    try:
-                        file_path = os.path.join(FILE_DIR, data)
-                        file_size = os.path.getsize(file_path)
-                        # Send header first: "FILE <name> <size>"
-                        header = f"FILE {data} {file_size}\n".encode()
-                        conn.send(header)
-                        # Then send the file content
-                        with open(file_path, "rb") as f:
-                            conn.sendall(f.read())
-                    except Exception as e:
-                        conn.send(f"Error sending file: {str(e)}".encode())
+                        conn.send(f"Error listing files: {e}".encode())
+
                 else:
-                    # Regular message, echo with ACK
-                    conn.send(f"{data} ACK\n".encode())
-            except ConnectionError:
-                break
-            except Exception as e:
-                print(f"Error handling client {client_name}: {e}")
-                try:
-                    conn.send(f"Error: {str(e)}\n".encode())
-                except:
-                    break
+                    file_path = os.path.join(FILE_DIR, msg)
+                    if os.path.isfile(file_path) and file_mode:
+                        try:
+                            file_size = os.path.getsize(file_path)
+                            # Send header first so client can exact-read
+                            conn.sendall(f"FILE {msg} {file_size}\n".encode())
+                            # Stream in chunks (don’t read whole file into RAM)
+                            with open(file_path, "rb") as f:
+                                while True:
+                                    blob = f.read(4096)
+                                    if not blob:
+                                        break
+                                    conn.sendall(blob)
+                        except Exception as e:
+                            conn.send(f"Error sending file: {e}".encode())
+                    else:
+                        conn.send(f"File {msg} does not exist, or your request didn't follow the list command".encode())
+                    file_mode = False
+
+    except SystemExit:
+        pass  # deliberate exit path after 'exit'
+    except ConnectionError:
+        pass
+    except Exception as e:
+        print(f"Error handling client {client_name}: {e}")
+        try:
+            conn.send(f"Error: {e}\n".encode())
+        except Exception:
+            pass
     finally:
-        # Always update the cache and close the connection
         with lock:
             if client_name in clients_cache:
                 clients_cache[client_name]['disconnected'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conn.close()
 
-    with lock:
-        clients_cache[client_name]['disconnected'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn.close()
 
 def main():
     # Create file repository directory if it doesn't exist

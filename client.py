@@ -89,13 +89,15 @@ def run_client(host: str, port: int) -> None:
             print("[error] Connection refused. Is the server running?")
             return
 
-        # Welcome banner
+        # Welcome banner (text)
         try:
-            welcome = sock.recv(RECV_BUF).decode(errors="replace")
+            welcome = recv_text_reply(sock)
         except Exception:
             welcome = ""
         if welcome:
             print(welcome)
+
+        awaiting_filename = False  # <-- NEW: only true immediately after 'list'
 
         # REPL loop
         while True:
@@ -109,7 +111,8 @@ def run_client(host: str, port: int) -> None:
                 continue
 
             try:
-                sock.sendall(msg.encode())
+                # Send every command as a line for framing
+                sock.sendall((msg + "\n").encode())
             except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
                 print("[error] Server closed the connection.")
                 break
@@ -117,8 +120,9 @@ def run_client(host: str, port: int) -> None:
             lower = msg.lower()
 
             if lower == "exit":
+                # Expect a small text reply, then quit
                 try:
-                    reply = sock.recv(RECV_BUF).decode(errors="replace")
+                    reply = recv_text_reply(sock)
                 except (ConnectionAbortedError, ConnectionResetError):
                     reply = "Disconnected by server."
                 if reply:
@@ -126,17 +130,30 @@ def run_client(host: str, port: int) -> None:
                 print("[info] Disconnected.")
                 break
 
-            elif lower in ("status", "list"):
+            elif lower == "list":
+                # 'list' returns a text listing...
                 reply = recv_text_reply(sock)
                 print(reply)
+                # ...and NOW it is file time: the very next user input is a filename
+                awaiting_filename = True
 
-            else:
-                # Handle all responses through receive_file_flow which can handle both files and text
+            elif awaiting_filename:
+                # Treat THIS input as a filename request. Server should reply:
+                #   FILE <name> <size>\n  + content   (or)   text error line
                 try:
-                    receive_file_flow(sock, msg)
+                    receive_file_flow(sock, requested_name=msg)
                 except (ConnectionAbortedError, ConnectionResetError):
                     print("Disconnected by server.")
                     break
+                finally:
+                    # Whether success or error, only the NEXT input after 'list' is a filename
+                    awaiting_filename = False
+
+            else:
+                # Not exit/list and not file time → expect a text reply (ACK, status, errors, etc.)
+                reply = recv_text_reply(sock)
+                if reply.strip():
+                    print(reply)
 
 def run_many_clients(host: str, port: int, n: int) -> None:
     import threading
