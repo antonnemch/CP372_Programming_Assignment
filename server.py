@@ -65,12 +65,12 @@ def handle_client(conn, addr, client_name):
 
                 else:
                     file_path = os.path.join(FILE_DIR, msg)
-                    if os.path.isfile(file_path) and file_mode:
+
+                    # If we just listed files, check if the message is a valid file name
+                    if file_mode and os.path.isfile(file_path):
                         try:
                             file_size = os.path.getsize(file_path)
-                            # Send header first so client can exact-read
                             conn.sendall(f"FILE {msg} {file_size}\n".encode())
-                            # Stream in chunks (don’t read whole file into RAM)
                             with open(file_path, "rb") as f:
                                 while True:
                                     blob = f.read(4096)
@@ -79,9 +79,14 @@ def handle_client(conn, addr, client_name):
                                     conn.sendall(blob)
                         except Exception as e:
                             conn.send(f"Error sending file: {e}".encode())
+                    elif file_mode:
+                        conn.send(f"File '{msg}' does not exist on the server.".encode())
                     else:
-                        conn.send(f"File {msg} does not exist, or your request didn't follow the list command".encode())
+                        # ✅ Regular text message → echo back with ACK
+                        conn.send(f"{msg} ACK".encode())
+
                     file_mode = False
+
 
     except SystemExit:
         pass  # deliberate exit path after 'exit'
