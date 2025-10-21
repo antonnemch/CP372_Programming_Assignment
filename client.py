@@ -1,3 +1,7 @@
+# CP372 Socket Programming Assignment
+# Adam Rak - 210700280
+# Anton Nemchinski - 169035377
+
 import socket
 import argparse
 import os

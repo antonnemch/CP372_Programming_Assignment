@@ -1,3 +1,7 @@
+# CP372 Socket Programming Assignment
+# Adam Rak - 210700280
+# Anton Nemchinski - 169035377
+
 import socket
 import threading
 import os
@@ -35,18 +39,17 @@ def handle_client(conn, addr, client_name):
             while b"\n" in buffer:
                 line, buffer = buffer.split(b"\n", 1)
                 msg = line.decode(errors="replace").strip()
-
-                # handle one complete command line
                 if not msg:
                     continue
 
                 lower = msg.lower()
 
+                # ====== EXIT COMMAND ======
                 if lower == "exit":
                     conn.send(b"Goodbye!")
-                    # after replying, close connection
                     raise SystemExit
 
+                # ====== STATUS COMMAND ======
                 elif lower == "status":
                     with lock:
                         response = "\n".join(
@@ -55,41 +58,47 @@ def handle_client(conn, addr, client_name):
                         )
                     conn.send(response.encode())
 
+                # ====== LIST COMMAND ======
                 elif lower == "list":
                     try:
                         files = os.listdir(FILE_DIR)
-                        conn.send("\n".join(files).encode())
+                        if files:
+                            conn.send("\n".join(files).encode())
+                        else:
+                            conn.send(b"No files found in server repository.")
                         file_mode = True
                     except Exception as e:
                         conn.send(f"Error listing files: {e}".encode())
 
+                # ====== FILE REQUEST / NORMAL MESSAGE ======
                 else:
                     file_path = os.path.join(FILE_DIR, msg)
 
-                    # If we just listed files, check if the message is a valid file name
-                    if file_mode and os.path.isfile(file_path):
-                        try:
-                            file_size = os.path.getsize(file_path)
-                            conn.sendall(f"FILE {msg} {file_size}\n".encode())
-                            with open(file_path, "rb") as f:
-                                while True:
-                                    blob = f.read(4096)
-                                    if not blob:
-                                        break
-                                    conn.sendall(blob)
-                        except Exception as e:
-                            conn.send(f"Error sending file: {e}".encode())
-                    elif file_mode:
-                        conn.send(f"File '{msg}' does not exist on the server.".encode())
+                    # If client just listed files, check if this is a valid file name
+                    if file_mode:
+                        if os.path.isfile(file_path):
+                            try:
+                                file_size = os.path.getsize(file_path)
+                                conn.sendall(f"FILE {msg} {file_size}\n".encode())
+                                with open(file_path, "rb") as f:
+                                    while True:
+                                        blob = f.read(4096)
+                                        if not blob:
+                                            break
+                                        conn.sendall(blob)
+                            except Exception as e:
+                                conn.send(f"Error sending file: {e}".encode())
+                        else:
+                            conn.send(f"File '{msg}' does not exist on the server.".encode())
+
                     else:
-                        # ✅ Regular text message → echo back with ACK
+                        # Normal message → Echo with ACK
                         conn.send(f"{msg} ACK".encode())
 
-                    file_mode = False
-
+                    file_mode = False  # reset mode after any message
 
     except SystemExit:
-        pass  # deliberate exit path after 'exit'
+        pass  # exit cleanly after 'exit'
     except ConnectionError:
         pass
     except Exception as e:
@@ -103,6 +112,7 @@ def handle_client(conn, addr, client_name):
             if client_name in clients_cache:
                 clients_cache[client_name]['disconnected'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conn.close()
+
 
 
 def main():
